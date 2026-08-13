@@ -3,9 +3,9 @@
 A full-stack Duolingo clone — Spanish course, gamified lessons, XP/streaks/hearts.
 
 ## Live Demo
+- **GitHub:** https://github.com/mehrotra-raj/Duolingo-Clone
 - **Frontend:** _(add your Vercel URL after deploy)_
 - **Backend API:** _(add your Railway/Render URL after deploy)_
-- **GitHub:** _(add your repo URL)_
 
 ## Stack
 | Layer | Tech |
