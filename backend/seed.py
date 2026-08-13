@@ -353,5 +353,17 @@ def seed():
     db.close()
 
 
+def seed_if_empty() -> None:
+    """Seed demo data only when the database has no users (safe for deploy)."""
+    init_db()
+    db = SessionLocal()
+    try:
+        if db.query(User).count() > 0:
+            return
+    finally:
+        db.close()
+    seed()
+
+
 if __name__ == "__main__":
     seed()

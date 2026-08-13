@@ -32,6 +32,14 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def on_startup():
         init_db()
+        # Auto-seed on first deploy so evaluators get a working demo
+        import sys
+        from pathlib import Path
+        backend_root = Path(__file__).resolve().parent.parent
+        if str(backend_root) not in sys.path:
+            sys.path.insert(0, str(backend_root))
+        from seed import seed_if_empty
+        seed_if_empty()
 
     @app.get("/")
     def health():
