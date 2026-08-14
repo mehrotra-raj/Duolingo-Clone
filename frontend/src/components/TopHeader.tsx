@@ -38,7 +38,7 @@ export default function TopHeader({ user }: Props) {
               <circle cx="34" cy="28" r="6" fill="#0f172a" />
             </g>
           </svg>
-        </motion.div>
+        </MotionDiv>
         <span className="course-flag" aria-hidden>🇪🇸</span>
         <span className="course-name">Spanish</span>
       </div>
