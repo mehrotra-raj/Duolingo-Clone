@@ -12,6 +12,7 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     display_name = Column(String, nullable=False)
     avatar_url = Column(String, default="")
+    password_hash = Column(String, nullable=True)
     total_xp = Column(Integer, default=0)
     current_streak = Column(Integer, default=0)
     longest_streak = Column(Integer, default=0)

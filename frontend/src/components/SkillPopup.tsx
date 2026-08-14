@@ -19,6 +19,10 @@ export default function SkillPopup({ skill, hearts, onClose }: Props) {
         ? 'in-progress'
         : 'available';
 
+  const progressPct = prog
+    ? Math.min(100, (prog.lessons_completed / prog.total_lessons) * 100)
+    : 0;
+
   const handleStart = async () => {
     if (hearts <= 0) return;
     setLoading(true);
@@ -30,9 +34,17 @@ export default function SkillPopup({ skill, hearts, onClose }: Props) {
     }
   };
 
+  const statusLabels = {
+    locked: 'Locked',
+    completed: 'Practice',
+    'in-progress': 'Continue',
+    available: 'Start',
+  };
+
   return (
     <div className="skill-popup-overlay" onClick={onClose}>
       <div className="skill-popup" onClick={e => e.stopPropagation()}>
+        <div className="skill-popup-pointer" aria-hidden />
         <div className="skill-popup-header">
           <div className="skill-popup-icon">{skill.icon_name}</div>
           <div className="skill-popup-title">{skill.title}</div>
@@ -41,30 +53,29 @@ export default function SkillPopup({ skill, hearts, onClose }: Props) {
             {prog && prog.crown_level >= 1 && ' · 👑 Crowned'}
           </div>
         </div>
+
         {prog && (
-          <div style={{ marginBottom: 20 }}>
+          <div className="skill-popup-progress">
             <div className="xp-bar-track">
-              <div className="xp-bar-fill" style={{ width: `${Math.min(100, ((prog.lessons_completed / prog.total_lessons) * 100))}%` }} />
+              <div className="xp-bar-fill" style={{ width: `${progressPct}%` }} />
             </div>
           </div>
         )}
+
         <button
-          className={`btn ${status === 'locked' || hearts <= 0 ? 'btn-gray' : 'btn-green'}`}
-          style={{ width: '100%' }}
+          type="button"
+          className={`btn btn-lg ${status === 'locked' || hearts <= 0 ? 'btn-gray' : 'btn-green'}`}
           onClick={status !== 'locked' && hearts > 0 ? handleStart : undefined}
           disabled={status === 'locked' || hearts <= 0 || loading}
         >
-          {loading ? '...' : hearts <= 0 ? '💔 Out of Hearts' : status === 'locked' ? '🔒 Locked' : status === 'completed' ? '⭐ Practice' : '▶ Start'}
+          {loading ? 'Loading...' : hearts <= 0 ? 'Out of Hearts' : statusLabels[status]}
         </button>
+
         {hearts <= 0 && status !== 'locked' && (
-          <p style={{ marginTop: 10, fontSize: 13, color: '#AFAFAF', textAlign: 'center', fontWeight: 600 }}>
-            Hearts regenerate every 4 hours, or refill in the Shop.
-          </p>
+          <p className="skill-popup-hint">Hearts regenerate every 4 hours, or refill in the Shop.</p>
         )}
-        <button
-          onClick={onClose}
-          style={{ width: '100%', marginTop: 10, background: 'none', border: 'none', color: '#AFAFAF', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}
-        >
+
+        <button type="button" className="skill-popup-close" onClick={onClose}>
           Close
         </button>
       </div>

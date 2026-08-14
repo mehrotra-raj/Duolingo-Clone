@@ -13,6 +13,8 @@ from app.schemas.course import (
 from app.services import user_service
 from app.services import gamification_service
 from app.core.config import settings
+import unicodedata
+import re
 
 
 def get_next_lesson(db: Session, skill_id: int, user_id: int) -> Optional[Lesson]:
@@ -83,22 +85,39 @@ def get_lesson_with_exercises(db: Session, lesson_id: int) -> Optional[LessonRes
     )
 
 
-def check_answer(db: Session, exercise_id: int, user_answer: str) -> Optional[CheckAnswerResponse]:
-    """Check if an answer is correct."""
+def check_answer(
+    db: Session, exercise_id: int, user_answer: str, user_id: int
+) -> Optional[CheckAnswerResponse]:
+    """Check if an answer is correct; deduct a heart server-side on wrong answers."""
     exercise = db.query(Exercise).filter(Exercise.id == exercise_id).first()
-    if not exercise:
+    user = user_service.get_user(db, user_id)
+    if not exercise or not user:
         return None
 
-    # Normalize answers for comparison
-    correct = exercise.correct_answer.strip().lower()
-    submitted = user_answer.strip().lower()
+    def _normalize(s: str) -> str:
+        # Normalize unicode, remove diacritics, punctuation, and collapse whitespace
+        s = s.strip().lower()
+        s = unicodedata.normalize('NFD', s)
+        s = ''.join(ch for ch in s if not unicodedata.combining(ch))
+        # remove punctuation / symbols (ASCII fallback)
+        s = re.sub(r"[^\w\s]", '', s)
+        s = re.sub(r'\s+', ' ', s).strip()
+        return s
 
+    correct = _normalize(exercise.correct_answer)
+    submitted = _normalize(user_answer)
     is_correct = correct == submitted
+
+    if not is_correct:
+        hearts_remaining = user_service.deduct_heart(db, user)
+    else:
+        hearts_remaining = user.hearts
 
     return CheckAnswerResponse(
         correct=is_correct,
         correct_answer=exercise.correct_answer,
         message="Great job!" if is_correct else f"Correct answer: {exercise.correct_answer}",
+        hearts_remaining=hearts_remaining,
     )
 
 
@@ -106,98 +125,104 @@ def complete_lesson(
     db: Session,
     lesson_id: int,
     user_id: int,
-    hearts_lost: int = 0,
     correct_answers: int = 0,
     total_exercises: int = 0,
 ) -> Optional[LessonCompleteResponse]:
     """Complete a lesson: award XP, update progress, check achievements."""
     lesson = db.query(Lesson).filter(Lesson.id == lesson_id).first()
-    user = db.query(User).filter(User.id == user_id).first()
+    user = user_service.get_user(db, user_id)
     if not lesson or not user:
         return None
 
-    # Deduct hearts for wrong answers
-    user.hearts = max(0, user.hearts - hearts_lost)
-
-    # Mark lesson as completed
-    lesson_progress = (
-        db.query(UserLessonProgress)
-        .filter(
-            UserLessonProgress.user_id == user_id,
-            UserLessonProgress.lesson_id == lesson_id,
-        )
-        .first()
-    )
+    if user.hearts <= 0:
+        return None
 
     xp_earned = lesson.xp_reward
     is_first_completion = False
 
-    if not lesson_progress:
-        is_first_completion = True
-        lesson_progress = UserLessonProgress(
-            user_id=user_id,
-            lesson_id=lesson_id,
-            completed=True,
-            xp_earned=xp_earned,
-            completed_at=datetime.utcnow(),
+    # Perform entire completion inside a transaction; call add_xp with commit=False
+    tx = db.begin_nested() if db.in_transaction() else db.begin()
+    with tx:
+        # Mark lesson as completed
+        lesson_progress = (
+            db.query(UserLessonProgress)
+            .filter(
+                UserLessonProgress.user_id == user_id,
+                UserLessonProgress.lesson_id == lesson_id,
+            )
+            .first()
         )
-        db.add(lesson_progress)
-    else:
-        if not lesson_progress.completed:
+
+        if not lesson_progress:
             is_first_completion = True
-        lesson_progress.completed = True
-        lesson_progress.xp_earned = xp_earned
-        lesson_progress.completed_at = datetime.utcnow()
+            lesson_progress = UserLessonProgress(
+                user_id=user_id,
+                lesson_id=lesson_id,
+                completed=True,
+                xp_earned=xp_earned,
+                completed_at=datetime.utcnow(),
+            )
+            db.add(lesson_progress)
+        else:
+            if not lesson_progress.completed:
+                is_first_completion = True
+            lesson_progress.completed = True
+            lesson_progress.xp_earned = xp_earned
+            lesson_progress.completed_at = datetime.utcnow()
 
-    # Update skill progress
-    skill = lesson.skill
-    skill_progress = (
-        db.query(UserSkillProgress)
-        .filter(
-            UserSkillProgress.user_id == user_id,
-            UserSkillProgress.skill_id == skill.id,
+        # Update skill progress
+        skill = lesson.skill
+        skill_progress = (
+            db.query(UserSkillProgress)
+            .filter(
+                UserSkillProgress.user_id == user_id,
+                UserSkillProgress.skill_id == skill.id,
+            )
+            .first()
         )
-        .first()
-    )
 
-    if not skill_progress:
-        skill_progress = UserSkillProgress(
-            user_id=user_id,
-            skill_id=skill.id,
-            lessons_completed=1 if is_first_completion else 0,
-            crown_level=0,
-            is_unlocked=True,
+        if not skill_progress:
+            skill_progress = UserSkillProgress(
+                user_id=user_id,
+                skill_id=skill.id,
+                lessons_completed=1 if is_first_completion else 0,
+                crown_level=0,
+                is_unlocked=True,
+            )
+            db.add(skill_progress)
+        elif is_first_completion:
+            skill_progress.lessons_completed += 1
+
+        # Check if skill is now complete (all lessons done)
+        if skill_progress.lessons_completed >= skill.total_lessons:
+            if skill_progress.crown_level < 1:
+                skill_progress.crown_level = 1
+            skill_progress.completed_at = datetime.utcnow()
+
+            # Unlock next skill
+            _unlock_next_skill(db, user_id, skill)
+
+        # Do not commit here; transaction context will commit on exit
+
+        # Add XP and update streak only on first completion
+        if is_first_completion:
+            # add_xp with commit=False so whole operation is atomic
+            user_service.add_xp(db, user, xp_earned, commit=False)
+        else:
+            xp_earned = 0
+
+        # Check achievements (should be idempotent)
+        earned_achievements = gamification_service.check_and_award_achievements(db, user_id)
+
+        skill_prog_response = SkillProgressResponse(
+            lessons_completed=skill_progress.lessons_completed,
+            crown_level=skill_progress.crown_level,
+            is_unlocked=skill_progress.is_unlocked,
+            total_lessons=skill.total_lessons,
         )
-        db.add(skill_progress)
-    elif is_first_completion:
-        skill_progress.lessons_completed += 1
 
-    # Check if skill is now complete (all lessons done)
-    if skill_progress.lessons_completed >= skill.total_lessons:
-        if skill_progress.crown_level < 1:
-            skill_progress.crown_level = 1
-        skill_progress.completed_at = datetime.utcnow()
-
-        # Unlock next skill
-        _unlock_next_skill(db, user_id, skill)
-
-    db.commit()
-
-    # Add XP and update streak only on first completion
-    if is_first_completion:
-        user_service.add_xp(db, user, xp_earned)
-    else:
-        xp_earned = 0
-
-    # Check achievements
-    earned_achievements = gamification_service.check_and_award_achievements(db, user_id)
-
-    skill_prog_response = SkillProgressResponse(
-        lessons_completed=skill_progress.lessons_completed,
-        crown_level=skill_progress.crown_level,
-        is_unlocked=skill_progress.is_unlocked,
-        total_lessons=skill.total_lessons,
-    )
+    # After transaction, refresh user for latest values
+    db.refresh(user)
 
     return LessonCompleteResponse(
         xp_earned=xp_earned,
@@ -274,4 +299,6 @@ def _ensure_skill_unlocked(db: Session, user_id: int, skill_id: int) -> None:
             is_unlocked=True,
         )
         db.add(sp)
-    db.commit()
+    # Only commit here if not inside a larger transaction
+    if not db.in_transaction():
+        db.commit()

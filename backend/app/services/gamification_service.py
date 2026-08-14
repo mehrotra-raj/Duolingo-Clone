@@ -156,6 +156,8 @@ def check_and_award_achievements(db: Session, user_id: int) -> list[str]:
             earned.append(a.name)
 
     if earned:
-        db.commit()
+        # If we're inside a transaction (caller will commit), avoid committing here
+        if not db.in_transaction():
+            db.commit()
 
     return earned

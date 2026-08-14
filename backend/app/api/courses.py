@@ -5,6 +5,8 @@ from app.db.database import get_db
 from app.schemas.course import CourseResponse, LearningPathResponse
 from app.services import course_service
 from app.core.config import settings
+from fastapi import Depends
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/courses", tags=["courses"])
 
@@ -18,9 +20,9 @@ def list_courses(db: Session = Depends(get_db)):
 def get_learning_path(
     course_id: int,
     db: Session = Depends(get_db),
-    user_id: int = settings.DEFAULT_USER_ID,
+    current_user=Depends(get_current_user),
 ):
-    path = course_service.get_learning_path(db, course_id, user_id)
+    path = course_service.get_learning_path(db, course_id, current_user.id)
     if not path:
         raise HTTPException(status_code=404, detail="Course not found")
     return path

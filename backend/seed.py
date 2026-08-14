@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from datetime import date, datetime, timedelta
 from app.db.database import SessionLocal, init_db
+from app.core.security import get_password_hash
 from app.models.user import User
 from app.models.course import Course, Unit, Skill, Lesson, Exercise
 from app.models.progress import UserCourseProgress, UserSkillProgress, UserLessonProgress
@@ -59,17 +60,18 @@ def seed():
 
     learner = User(
         id=1, username="learner", display_name="You",
+        password_hash=get_password_hash("learnerpass"),
         avatar_url="", total_xp=120, current_streak=3, longest_streak=5,
         last_activity_date=today, hearts=5, max_hearts=5,
         hearts_updated_at=datetime.utcnow(), gems=500,
         daily_xp_goal=20, daily_xp_earned=10, daily_xp_date=today,
     )
     bots = [
-        User(id=2, username="lucia", display_name="Lucía García", total_xp=980, current_streak=14, longest_streak=30, hearts=5, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=200, daily_xp_goal=30, daily_xp_earned=30, daily_xp_date=today),
-        User(id=3, username="marco", display_name="Marco Rossi",  total_xp=750, current_streak=7, longest_streak=21, hearts=4, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=150, daily_xp_goal=20, daily_xp_earned=20, daily_xp_date=today),
-        User(id=4, username="aisha", display_name="Aisha Patel",  total_xp=540, current_streak=5, longest_streak=10, hearts=5, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=300, daily_xp_goal=10, daily_xp_earned=10, daily_xp_date=today),
-        User(id=5, username="chen",  display_name="Chen Wei",     total_xp=310, current_streak=2, longest_streak=8, hearts=3, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=100, daily_xp_goal=20, daily_xp_earned=0, daily_xp_date=today),
-        User(id=6, username="priya", display_name="Priya Sharma", total_xp=210, current_streak=1, longest_streak=4, hearts=5, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=50, daily_xp_goal=10, daily_xp_earned=10, daily_xp_date=today),
+        User(id=2, username="lucia", display_name="Lucía García", password_hash=get_password_hash("lucia123"), total_xp=980, current_streak=14, longest_streak=30, hearts=5, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=200, daily_xp_goal=30, daily_xp_earned=30, daily_xp_date=today),
+        User(id=3, username="marco", display_name="Marco Rossi", password_hash=get_password_hash("marco123"),  total_xp=750, current_streak=7, longest_streak=21, hearts=4, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=150, daily_xp_goal=20, daily_xp_earned=20, daily_xp_date=today),
+        User(id=4, username="aisha", display_name="Aisha Patel", password_hash=get_password_hash("aisha123"),  total_xp=540, current_streak=5, longest_streak=10, hearts=5, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=300, daily_xp_goal=10, daily_xp_earned=10, daily_xp_date=today),
+        User(id=5, username="chen",  display_name="Chen Wei", password_hash=get_password_hash("chen123"),     total_xp=310, current_streak=2, longest_streak=8, hearts=3, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=100, daily_xp_goal=20, daily_xp_earned=0, daily_xp_date=today),
+        User(id=6, username="priya", display_name="Priya Sharma", password_hash=get_password_hash("priya123"), total_xp=210, current_streak=1, longest_streak=4, hearts=5, max_hearts=5, hearts_updated_at=datetime.utcnow(), gems=50, daily_xp_goal=10, daily_xp_earned=10, daily_xp_date=today),
     ]
     db.add(learner)
     db.add_all(bots)

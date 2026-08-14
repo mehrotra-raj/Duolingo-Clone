@@ -28,6 +28,9 @@ export const updateUser = (data: Partial<Pick<User, 'display_name' | 'daily_xp_g
 export const refillHearts = (): Promise<User> =>
   request('/users/me/refill-hearts', { method: 'POST' });
 
+export const deductHeart = (): Promise<User> =>
+  request('/users/me/deduct-heart', { method: 'POST' });
+
 // ── Learning Path ─────────────────────────────────────────────────────────────
 export const fetchLearningPath = (courseId = 1): Promise<LearningPath> =>
   request(`/courses/${courseId}/path`);
@@ -50,7 +53,7 @@ export const checkAnswer = (
 
 export const completeLesson = (
   lessonId: number,
-  payload: { hearts_lost: number; correct_answers: number; total_exercises: number },
+  payload: { correct_answers: number; total_exercises: number },
 ): Promise<LessonCompleteResponse> =>
   request(`/lessons/${lessonId}/complete`, {
     method: 'POST',

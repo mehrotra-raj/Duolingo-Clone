@@ -1,0 +1,16 @@
+[app]
+  # Replace with your Fly app name or set during `fly launch`
+  name = "duolingo-backend"
+  # Primary region - adjust as needed
+  primary_region = "iad"
+
+[build]
+  # Use Paketo Python buildpack for simple builds (Fly uses buildpacks by default)
+  builder = "paketobuildpacks/builder:base"
+
+[env]
+  # Example: you can optionally set env vars here, but it's better to set via the Fly dashboard
+  # DATABASE_URL = "postgres://..."
+
+[deploy]
+  release_command = "bash start.sh"

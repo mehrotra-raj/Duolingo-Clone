@@ -57,8 +57,8 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="page-content" style={{ paddingTop: 80, textAlign: 'center', color: '#AFAFAF' }}>
-        Loading settings...
+      <div className="loading-state">
+        <p>Loading settings...</p>
       </div>
     );
   }

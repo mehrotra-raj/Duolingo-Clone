@@ -101,10 +101,10 @@ class CheckAnswerResponse(BaseModel):
     correct: bool
     correct_answer: str
     message: str
+    hearts_remaining: int
 
 
 class LessonCompleteRequest(BaseModel):
-    hearts_lost: int = 0
     correct_answers: int = 0
     total_exercises: int = 0
 

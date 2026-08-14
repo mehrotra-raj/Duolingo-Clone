@@ -33,10 +33,23 @@ def update_user(db: Session, user_id: int, update_data: UserUpdate) -> Optional[
 
 
 def deduct_heart(db: Session, user: User) -> int:
-    """Deduct one heart. Returns remaining hearts."""
-    if user.hearts > 0:
-        user.hearts -= 1
-        db.commit()
+    """Deduct one heart atomically. Returns remaining hearts.
+
+    Note: SQLite doesn't support row-level SELECT FOR UPDATE; we minimize race window
+    by performing the decrement inside a transaction. For high-concurrency, consider
+    using a transactional DB (Postgres) or an application-level lock.
+    """
+    # Use nested transaction if a transaction is already active on the session
+    tx = db.begin_nested() if db.in_transaction() else db.begin()
+    with tx:
+        # refresh user row
+        db.refresh(user)
+        if user.hearts > 0:
+            user.hearts -= 1
+        # ensure non-negative
+        if user.hearts < 0:
+            user.hearts = 0
+        # transaction will commit on exit
     return user.hearts
 
 
@@ -57,8 +70,11 @@ def refill_hearts(db: Session, user_id: int) -> Optional[User]:
     return user
 
 
-def add_xp(db: Session, user: User, xp: int) -> User:
-    """Add XP to user, update daily XP, streak, and weekly leaderboard."""
+def add_xp(db: Session, user: User, xp: int, commit: bool = True) -> User:
+    """Add XP to user, update daily XP, streak, and weekly leaderboard.
+
+    If `commit` is False, caller is responsible for committing the transaction.
+    """
     user.total_xp += xp
     user.daily_xp_earned += xp
 
@@ -80,8 +96,13 @@ def add_xp(db: Session, user: User, xp: int) -> User:
     if xp > 0:
         _update_weekly_leaderboard_xp(db, user.id, xp)
 
-    db.commit()
-    db.refresh(user)
+    if commit:
+        db.commit()
+        db.refresh(user)
+    else:
+        # caller will refresh/commit as needed
+        pass
+
     return user
 
 

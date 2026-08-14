@@ -81,11 +81,9 @@ def get_learning_path(db: Session, course_id: int, user_id: int) -> Optional[Lea
                 progress=progress,
             ))
 
-            # Determine if this skill is complete for unlock chain
+            # Next skill unlocks only after all lessons in this skill are done
             if sp and sp.lessons_completed >= skill.total_lessons:
                 prev_skill_complete = True
-            elif sp and sp.lessons_completed > 0:
-                prev_skill_complete = True  # At least started
             else:
                 prev_skill_complete = False
 

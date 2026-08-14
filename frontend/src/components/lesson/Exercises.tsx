@@ -1,12 +1,18 @@
 'use client';
 import { useState } from 'react';
 import type { Exercise } from '@/lib/types';
-import { checkAnswer } from '@/lib/api';
+import { checkAnswer, deductHeart } from '@/lib/api';
+
+type AnswerHandler = (
+  correct: boolean,
+  correctAnswer: string,
+  heartsRemaining: number,
+) => void;
 
 /* ── Multiple Choice ─────────────────────────────────────────────── */
 export function MultipleChoice({
   exercise, onAnswer, disabled,
-}: { exercise: Exercise; onAnswer: (correct: boolean) => void; disabled: boolean }) {
+}: { exercise: Exercise; onAnswer: AnswerHandler; disabled: boolean }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [result, setResult] = useState<null | { correct: boolean; correct_answer: string }>(null);
 
@@ -15,7 +21,7 @@ export function MultipleChoice({
     setSelected(opt);
     const res = await checkAnswer(exercise.id, opt);
     setResult(res);
-    onAnswer(res.correct);
+    onAnswer(res.correct, res.correct_answer, res.hearts_remaining);
   };
 
   return (
@@ -28,10 +34,8 @@ export function MultipleChoice({
           else cls += ' disabled';
         } else if (opt === selected) cls += ' selected';
         return (
-          <button key={i} className={cls} onClick={() => handleSelect(opt)}>
-            <span style={{ width: 28, height: 28, borderRadius: 8, border: `2px solid ${result ? 'transparent' : '#E5E5E5'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              {String.fromCharCode(65 + i)}
-            </span>
+          <button key={i} type="button" className={cls} onClick={() => handleSelect(opt)}>
+            <span className="mc-option-letter">{String.fromCharCode(65 + i)}</span>
             {opt}
           </button>
         );
@@ -43,10 +47,9 @@ export function MultipleChoice({
 /* ── Word Bank ───────────────────────────────────────────────────── */
 export function WordBank({
   exercise, onAnswer, disabled,
-}: { exercise: Exercise; onAnswer: (correct: boolean) => void; disabled: boolean }) {
+}: { exercise: Exercise; onAnswer: AnswerHandler; disabled: boolean }) {
   const [answer, setAnswer] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
 
   const pool = exercise.word_bank ?? [];
   const toggle = (word: string, inAnswer: boolean) => {
@@ -59,8 +62,7 @@ export function WordBank({
     if (!answer.length) return;
     const res = await checkAnswer(exercise.id, answer.join(' '));
     setSubmitted(true);
-    setIsCorrect(res.correct);
-    onAnswer(res.correct);
+    onAnswer(res.correct, res.correct_answer, res.hearts_remaining);
   };
 
   return (
@@ -90,7 +92,7 @@ export function WordBank({
 /* ── Fill Blank ──────────────────────────────────────────────────── */
 export function FillBlank({
   exercise, onAnswer, disabled,
-}: { exercise: Exercise; onAnswer: (correct: boolean) => void; disabled: boolean }) {
+}: { exercise: Exercise; onAnswer: AnswerHandler; disabled: boolean }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [result, setResult] = useState<null | { correct: boolean; correct_answer: string }>(null);
   const sentence = exercise.sentence_with_blank ?? '_____ ?';
@@ -100,7 +102,7 @@ export function FillBlank({
     setSelected(opt);
     const res = await checkAnswer(exercise.id, opt);
     setResult(res);
-    onAnswer(res.correct);
+    onAnswer(res.correct, res.correct_answer, res.hearts_remaining);
   };
 
   const filled = sentence.replace('_____', selected ? `[${selected}]` : '_____');
@@ -132,7 +134,7 @@ export function FillBlank({
 /* ── Type Answer ─────────────────────────────────────────────────── */
 export function TypeAnswer({
   exercise, onAnswer, disabled,
-}: { exercise: Exercise; onAnswer: (correct: boolean) => void; disabled: boolean }) {
+}: { exercise: Exercise; onAnswer: AnswerHandler; disabled: boolean }) {
   const [value, setValue] = useState('');
   const [result, setResult] = useState<null | { correct: boolean; correct_answer: string }>(null);
 
@@ -140,7 +142,7 @@ export function TypeAnswer({
     if (!value.trim() || result || disabled) return;
     const res = await checkAnswer(exercise.id, value.trim());
     setResult(res);
-    onAnswer(res.correct);
+    onAnswer(res.correct, res.correct_answer, res.hearts_remaining);
   };
 
   return (
@@ -166,8 +168,13 @@ export function TypeAnswer({
 
 /* ── Match Pairs ─────────────────────────────────────────────────── */
 export function MatchPairs({
-  exercise, onAnswer, disabled,
-}: { exercise: Exercise; onAnswer: (correct: boolean, correctAnswer?: string) => void; disabled: boolean }) {
+  exercise, onAnswer, onHeartLost, disabled,
+}: {
+  exercise: Exercise;
+  onAnswer: AnswerHandler;
+  onHeartLost: (heartsRemaining: number) => void;
+  disabled: boolean;
+}) {
   const pairs = exercise.match_pairs ?? [];
   const [selLeft, setSelLeft] = useState<string | null>(null);
   const [selRight, setSelRight] = useState<string | null>(null);
@@ -188,10 +195,10 @@ export function MatchPairs({
       .join(',');
     const res = await checkAnswer(exercise.id, encoded);
     setDone(true);
-    onAnswer(res.correct, res.correct_answer);
+    onAnswer(res.correct, res.correct_answer, res.hearts_remaining);
   };
 
-  const attempt = (l: string, r: string) => {
+  const attempt = async (l: string, r: string) => {
     const pair = pairs.find(p => p.left === l);
     if (pair?.right === r) {
       const next = new Set(matched).add(l).add(r);
@@ -202,6 +209,12 @@ export function MatchPairs({
     } else {
       setWrong([l, r]);
       setTimeout(() => setWrong([]), 600);
+      try {
+        const user = await deductHeart();
+        onHeartLost(user.hearts);
+      } catch {
+        /* keep local state if API unavailable */
+      }
     }
     setSelLeft(null); setSelRight(null);
   };

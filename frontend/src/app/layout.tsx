@@ -2,11 +2,12 @@ import type { Metadata } from 'next';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
 import BottomNav from '@/components/BottomNav';
+import PageShell from '@/components/PageShell';
 import StreakChecker from '@/components/StreakChecker';
 
 export const metadata: Metadata = {
-  title: 'Duolingo Clone — Learn Spanish',
-  description: 'A full-stack Duolingo clone. Learn Spanish with bite-sized lessons.',
+  title: 'Duolingo — Learn Spanish',
+  description: 'Learn Spanish with bite-sized lessons. Fun, free, and effective.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <StreakChecker />
           <Sidebar />
           <div className="main-content">
-            {children}
+            <PageShell>{children}</PageShell>
           </div>
           <BottomNav />
         </div>

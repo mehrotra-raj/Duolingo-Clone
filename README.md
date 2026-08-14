@@ -20,23 +20,21 @@ A full-stack Duolingo clone — Spanish course, gamified lessons, XP/streaks/hea
 ### 1. Backend
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env          # optional — defaults work locally
-python seed.py                # seed the database (run once)
-uvicorn app.main:app --reload --port 8000
+chmod +x run.sh    # first time only
+./run.sh
 ```
+Creates venv, installs deps, seeds DB on first run → **http://localhost:8000**
 
 ### 2. Frontend
 ```bash
 cd frontend
-npm install
-cp .env.example .env.local    # optional — defaults to localhost:8000
-npm run dev
+chmod +x run.sh    # first time only
+./run.sh
 ```
 
 Open **http://localhost:3000**
+
+> Run backend from `backend/` (or use `./run.sh`). Running `uvicorn` from the project root causes `ModuleNotFoundError: No module named 'app'`.
 
 ## Environment Variables
 
@@ -67,8 +65,9 @@ Open **http://localhost:3000**
 **Request flow (lesson):**
 1. User clicks skill → `GET /skills/{id}/next-lesson`
 2. Lesson loads → `GET /lessons/{id}` (exercises, no answers)
-3. Each answer → `POST /exercises/{id}/check`
-4. Lesson finish → `POST /lessons/{id}/complete` (XP, hearts, progress, achievements)
+3. Each answer → `POST /exercises/{id}/check` (deducts a heart server-side on wrong answers)
+4. Wrong match-pair tap → `POST /users/me/deduct-heart`
+5. Lesson finish → `POST /lessons/{id}/complete` (XP, progress, achievements; blocked if out of hearts)
 
 ## Database Schema
 
@@ -107,6 +106,7 @@ Interactive docs: `http://localhost:8000/docs`
 | GET | `/users/me` | Current user (hearts regen applied) |
 | PATCH | `/users/me` | Update display name, daily XP goal |
 | POST | `/users/me/refill-hearts` | Spend 350 gems to refill hearts |
+| POST | `/users/me/deduct-heart` | Deduct one heart (e.g. wrong match-pair) |
 | GET | `/courses` | List courses |
 | GET | `/courses/{id}/path` | Learning path with unlock/progress |
 | GET | `/skills/{id}/next-lesson` | Next incomplete lesson for skill |
@@ -148,7 +148,8 @@ Update the Live Demo links at the top of this README.
 - One language course (Spanish) — sufficient per assignment brief
 - Audio/speech exercises not implemented (optional per brief)
 - Shop: heart refill works; other items are "Coming soon" placeholders
-- Hearts lost during lessons are reported by the client on lesson complete
+- Hearts are deducted on the server when an answer is wrong (`/exercises/{id}/check`) or a match-pair is incorrect (`/users/me/deduct-heart`)
+- Lesson completion is rejected if the learner has zero hearts
 - SQLite is fine for demo; production would use PostgreSQL
 
 ## Implementation Plan

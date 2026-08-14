@@ -2,41 +2,59 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { fetchLesson, fetchUser, completeLesson } from '@/lib/api';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import type { Lesson, Exercise, LessonCompleteResponse } from '@/lib/types';
 import {
   MultipleChoice, WordBank, FillBlank, TypeAnswer, MatchPairs,
 } from '@/components/lesson/Exercises';
+import { IconClose, IconHeart, IconCheck } from '@/components/icons';
 
-/* ── Feedback bar ─────────────────────────────────────────────────── */
 function FeedbackBar({
   correct, correctAnswer, onContinue,
 }: { correct: boolean; correctAnswer: string; onContinue: () => void }) {
   return (
     <div className={`feedback-bar ${correct ? 'correct' : 'wrong'}`}>
-      <div>
-        <div className="feedback-icon">{correct ? '✅' : '❌'}</div>
-        <div className="feedback-title">{correct ? 'Correct!' : 'Incorrect'}</div>
-        {!correct && <div className="feedback-subtitle">Correct answer: {correctAnswer}</div>}
+      <div className="feedback-content">
+        <div className="feedback-icon-wrap">
+          {correct ? <IconCheck /> : <IconClose />}
+        </div>
+        <div>
+          <div className="feedback-title">{correct ? 'Nice job!' : 'Correct solution:'}</div>
+          {!correct && <div className="feedback-subtitle">{correctAnswer}</div>}
+        </div>
       </div>
-      <button className={`btn ${correct ? 'btn-green' : 'btn-red'}`} onClick={onContinue}>
+      <button type="button" className={`btn ${correct ? 'btn-green' : 'btn-red'}`} onClick={onContinue}>
         Continue
       </button>
     </div>
   );
 }
 
-/* ── Lesson Complete ──────────────────────────────────────────────── */
 function LessonComplete({
-  xp, accuracy, streak, onContinue,
-}: { xp: number; accuracy: number; streak: number; onContinue: () => void }) {
+  xpEarned, totalXp, accuracy, streak, achievements, onContinue,
+}: {
+  xpEarned: number;
+  totalXp: number;
+  accuracy: number;
+  streak: number;
+  achievements: string[];
+  onContinue: () => void;
+}) {
   return (
     <div className="lesson-complete">
       <div className="complete-burst">🎉</div>
-      <div className="complete-title">Lesson Complete!</div>
+      <div className="complete-title">Lesson complete!</div>
+      {achievements.length > 0 && (
+        <div className="lesson-achievements">
+          {achievements.map(name => (
+            <span key={name} className="lesson-achievement-badge">🏆 {name}</span>
+          ))}
+        </div>
+      )}
       <div className="complete-stats">
         <div className="complete-stat">
-          <div className="complete-stat-val" style={{ color: 'var(--duo-gold)' }}>+{xp}</div>
-          <div className="complete-stat-lbl">XP Earned</div>
+          <div className="complete-stat-val" style={{ color: 'var(--duo-gold)' }}>+{xpEarned}</div>
+          <div className="complete-stat-lbl">XP earned</div>
         </div>
         <div className="complete-stat">
           <div className="complete-stat-val" style={{ color: 'var(--duo-green)' }}>{accuracy}%</div>
@@ -47,52 +65,50 @@ function LessonComplete({
           <div className="complete-stat-lbl">Streak</div>
         </div>
       </div>
-      <button className="btn btn-green" style={{ padding: '16px 48px', fontSize: 18 }} onClick={onContinue}>
+      <p className="complete-total-xp">Total XP: ⭐ {totalXp}</p>
+      <button type="button" className="btn btn-green btn-lg" onClick={onContinue}>
         Continue
       </button>
     </div>
   );
 }
 
-/* ── Out of Hearts ────────────────────────────────────────────────── */
 function OutOfHearts({ onLeave }: { onLeave: () => void }) {
   return (
     <div className="hearts-modal-overlay">
       <div className="hearts-modal">
-        <div style={{ fontSize: 64 }}>💔</div>
-        <h2>Out of Hearts!</h2>
-        <p>You've run out of hearts. Hearts regenerate 1 every 4 hours, or you can refill with gems.</p>
-        <button className="btn btn-red" style={{ width: '100%' }} onClick={onLeave}>
-          Return to Home
-        </button>
+        <div className="hearts-modal-icon">💔</div>
+        <h2>Out of hearts!</h2>
+        <p>Hearts regenerate 1 every 4 hours, or you can refill with gems in the Shop.</p>
+        <div className="hearts-modal-actions">
+          <button type="button" className="btn btn-red" onClick={onLeave}>
+            Return to Home
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ── Main Lesson Page ─────────────────────────────────────────────── */
 export default function LessonPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
+  const reduceMotion = useReducedMotion();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [maxHearts, setMaxHearts] = useState(5);
   const [current, setCurrent] = useState(0);
   const [hearts, setHearts] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
-  const [heartsLost, setHeartsLost] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [completeError, setCompleteError] = useState('');
 
-  // feedback state
   const [feedback, setFeedback] = useState<{ correct: boolean; correctAnswer: string } | null>(null);
   const [answered, setAnswered] = useState(false);
 
-  // end states
   const [completed, setCompleted] = useState(false);
   const [completionResult, setCompletionResult] = useState<LessonCompleteResponse | null>(null);
   const [outOfHearts, setOutOfHearts] = useState(false);
-
-  // Confirm quit
   const [showQuit, setShowQuit] = useState(false);
 
   useEffect(() => {
@@ -112,26 +128,38 @@ export default function LessonPage() {
     router.push('/');
   };
 
-  const handleAnswer = useCallback((correct: boolean, correctAnswer: string) => {
+  const handleHeartUpdate = useCallback((remaining: number) => {
+    setHearts(remaining);
+    if (remaining <= 0) {
+      setTimeout(() => setOutOfHearts(true), 600);
+    }
+  }, []);
+
+  const handleAnswer = useCallback((
+    correct: boolean,
+    correctAnswer: string,
+    heartsRemaining: number,
+  ) => {
     if (answered) return;
     setAnswered(true);
+    setHearts(heartsRemaining);
     if (correct) {
       setCorrectCount(c => c + 1);
       setFeedback({ correct: true, correctAnswer });
     } else {
-      const newHearts = hearts - 1;
-      setHearts(newHearts);
-      setHeartsLost(h => h + 1);
       setFeedback({ correct: false, correctAnswer });
-      if (newHearts <= 0) {
+      if (heartsRemaining <= 0) {
         setTimeout(() => setOutOfHearts(true), 1200);
       }
     }
-  }, [answered, hearts]);
+  }, [answered]);
 
-  // Wrap per-exercise onAnswer to also pass correctAnswer
-  const makeHandler = (exercise: Exercise) => (correct: boolean) => {
-    handleAnswer(correct, exercise.correct_answer ?? '');
+  const makeHandler = (exercise: Exercise) => (
+    correct: boolean,
+    correctAnswer?: string,
+    heartsRemaining?: number,
+  ) => {
+    handleAnswer(correct, correctAnswer ?? '', heartsRemaining ?? hearts);
   };
 
   const handleContinue = async () => {
@@ -143,25 +171,18 @@ export default function LessonPage() {
 
     if (nextIdx >= lesson.exercises.length) {
       const total = lesson.exercises.length;
+      setCompleteError('');
       try {
         const result = await completeLesson(lesson.id, {
-          hearts_lost: heartsLost,
           correct_answers: correctCount,
           total_exercises: total,
         });
         setCompletionResult(result);
         setHearts(result.hearts_remaining);
+        setCompleted(true);
       } catch {
-        setCompletionResult({
-          xp_earned: lesson.xp_reward,
-          total_xp: 0,
-          hearts_remaining: hearts,
-          streak: 0,
-          skill_progress: { lessons_completed: 0, crown_level: 0, is_unlocked: true, total_lessons: 0 },
-          achievements_earned: [],
-        });
+        setCompleteError('Could not save lesson progress. Hearts may have run out.');
       }
-      setCompleted(true);
     } else {
       setCurrent(nextIdx);
     }
@@ -169,20 +190,22 @@ export default function LessonPage() {
 
   if (loading || !lesson) {
     return (
-      <div className="lesson-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: 48 }}>⏳</div>
-        <p style={{ marginTop: 16, fontWeight: 700, color: '#AFAFAF' }}>Loading lesson...</p>
+      <div className="lesson-shell">
+        <div className="loading-state">
+          <div className="loading-mascot">⏳</div>
+          <p>Loading lesson...</p>
+        </div>
       </div>
     );
   }
 
   const totalEx = lesson.exercises.length;
-  const progress = totalEx > 0 ? (current / totalEx) * 100 : 0;
+  const progress = totalEx > 0 ? ((current + (answered ? 1 : 0)) / totalEx) * 100 : 0;
   const accuracy = totalEx > 0 ? Math.round((correctCount / totalEx) * 100) : 100;
 
   if (outOfHearts && !completed) {
     return (
-      <div className="lesson-shell" style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <div className="lesson-shell">
         <OutOfHearts onLeave={goHome} />
       </div>
     );
@@ -191,91 +214,115 @@ export default function LessonPage() {
   if (completed && completionResult) {
     return (
       <LessonComplete
-        xp={completionResult.xp_earned}
+        xpEarned={completionResult.xp_earned}
+        totalXp={completionResult.total_xp}
         accuracy={accuracy}
         streak={completionResult.streak}
+        achievements={completionResult.achievements_earned}
         onContinue={goHome}
       />
     );
   }
 
   const exercise = lesson.exercises[current];
-
   const renderExercise = () => {
     const props = { exercise, onAnswer: makeHandler(exercise), disabled: answered };
     switch (exercise.type) {
-      case 'multiple_choice':    return <MultipleChoice {...props} />;
+      case 'multiple_choice':     return <MultipleChoice {...props} />;
       case 'translate_word_bank': return <WordBank {...props} />;
-      case 'fill_blank':         return <FillBlank {...props} />;
-      case 'type_answer':        return <TypeAnswer {...props} />;
-      case 'match_pairs':        return <MatchPairs exercise={exercise} onAnswer={(c, ans) => handleAnswer(c, ans ?? '')} disabled={answered} />;
-      default:                   return <p>Unknown exercise type</p>;
+      case 'fill_blank':          return <FillBlank {...props} />;
+      case 'type_answer':         return <TypeAnswer {...props} />;
+      case 'match_pairs':
+        return (
+          <MatchPairs
+            exercise={exercise}
+            onAnswer={handleAnswer}
+            onHeartLost={handleHeartUpdate}
+            disabled={answered}
+          />
+        );
+      default: return <p>Unknown exercise type</p>;
     }
   };
+  const exerciseHint = {
+    multiple_choice: 'Select the correct answer',
+    translate_word_bank: 'Tap the words in order',
+    match_pairs: 'Match the pairs',
+    fill_blank: 'Choose the missing word',
+    type_answer: 'Type your answer',
+  }[exercise.type] ?? 'Answer the question';
 
   return (
     <div className="lesson-shell">
-      {/* Top bar */}
       <div className="lesson-topbar">
-        <button className="lesson-close-btn" onClick={() => setShowQuit(true)}>✕</button>
+        <button type="button" className="lesson-close-btn" onClick={() => setShowQuit(true)} aria-label="Close lesson">
+          <IconClose />
+        </button>
         <div className="lesson-progress-bar-track">
           <div className="lesson-progress-bar-fill" style={{ width: `${progress}%` }} />
         </div>
         <div className="lesson-hearts">
           {Array.from({ length: maxHearts }).map((_, i) => (
-            <span key={i} style={{ opacity: i < hearts ? 1 : 0.2, transition: 'opacity 300ms' }}>❤️</span>
+            <IconHeart key={i} filled={i < hearts} />
           ))}
         </div>
       </div>
 
-      {/* Exercise body */}
       <div className="lesson-body">
-        <p className="exercise-sub">
-          {exercise.type === 'multiple_choice' ? 'Tap the correct option' :
-            exercise.type === 'translate_word_bank' ? 'Tap the words in order' :
-              exercise.type === 'match_pairs' ? 'Match the pairs' :
-                exercise.type === 'fill_blank' ? 'Choose the missing word' :
-                  'Type your answer'}
-        </p>
+        <p className="exercise-sub">{exerciseHint}</p>
         <h2 className="exercise-prompt">{exercise.prompt}</h2>
-        {renderExercise()}
+        <AnimatePresence mode="popLayout" initial={false}>
+          <motion.div
+            key={current}
+            initial={reduceMotion ? undefined : { opacity: 0, y: 10 }}
+            animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
+            transition={{ duration: 0.26, ease: 'easeOut' }}
+          >
+            {renderExercise()}
+          </motion.div>
+        </AnimatePresence>
+        {completeError && (
+          <p className="lesson-error">{completeError}</p>
+        )}
       </div>
 
-      {/* Feedback */}
-      {feedback && !outOfHearts && (
-        <FeedbackBar
-          correct={feedback.correct}
-          correctAnswer={feedback.correctAnswer}
-          onContinue={handleContinue}
-        />
-      )}
+      <AnimatePresence>
+        {feedback && !outOfHearts && (
+          <motion.div
+            initial={reduceMotion ? undefined : { opacity: 0, y: 12 }}
+            animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+            exit={reduceMotion ? undefined : { opacity: 0, y: 12 }}
+            transition={{ duration: 0.22 }}
+            key="feedback"
+          >
+            <FeedbackBar
+              correct={feedback.correct}
+              correctAnswer={feedback.correctAnswer}
+              onContinue={handleContinue}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Footer check button (for types that need external submit) */}
       {!feedback && !answered && exercise.type === 'match_pairs' && (
         <div className="lesson-footer">
-          <span style={{ color: '#AFAFAF', fontWeight: 600, fontSize: 14 }}>Match all pairs to continue</span>
+          <span style={{ color: 'var(--duo-gray2)', fontWeight: 700, fontSize: 14 }}>Match all pairs to continue</span>
         </div>
       )}
 
-      {/* Out of hearts */}
-      {outOfHearts && <OutOfHearts onLeave={goHome} />}
-
-      {/* Quit confirmation */}
       {showQuit && (
         <div className="hearts-modal-overlay">
           <div className="hearts-modal">
-            <div style={{ fontSize: 48 }}>🤔</div>
+            <div className="hearts-modal-icon">🤔</div>
             <h2 style={{ color: 'var(--duo-dark)' }}>Quit lesson?</h2>
-            <p>Your progress will be lost.</p>
-            <button className="btn btn-red" style={{ width: '100%' }} onClick={goHome}>
-              Quit
-            </button>
-            <button
-              onClick={() => setShowQuit(false)}
-              style={{ marginTop: 12, width: '100%', background: 'none', border: 'none', color: '#AFAFAF', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}
-            >
-              Keep Learning
-            </button>
+            <p>Wrong answers already cost hearts. Lesson progress in this session will be lost.</p>
+            <div className="hearts-modal-actions">
+              <button type="button" className="btn btn-red" onClick={goHome}>Quit</button>
+              <button type="button" className="modal-link-btn" onClick={() => setShowQuit(false)}>
+                Keep Learning
+              </button>
+            </div>
           </div>
         </div>
       )}

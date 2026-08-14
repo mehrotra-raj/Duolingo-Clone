@@ -80,6 +80,7 @@ export interface CheckAnswerResponse {
   correct: boolean;
   correct_answer: string;
   message: string;
+  hearts_remaining: number;
 }
 
 export interface LessonCompleteResponse {

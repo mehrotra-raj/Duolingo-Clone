@@ -54,22 +54,22 @@ export default function ShopPage() {
 
   if (loading) {
     return (
-      <div className="page-content" style={{ paddingTop: 80, textAlign: 'center', color: '#AFAFAF' }}>
-        Loading shop...
+      <div className="loading-state">
+        <p>Loading shop...</p>
       </div>
     );
   }
 
   return (
     <div className="page-content">
-      <h1 className="page-title">💎 Shop</h1>
+      <h1 className="page-title">Shop</h1>
       <p className="page-subtitle">Spend your gems on power-ups and perks</p>
 
-      <div style={{ background: 'linear-gradient(135deg, #1CB0F6, #CE82FF)', borderRadius: 20, padding: 24, marginBottom: 28, color: '#fff', display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ fontSize: 48 }}>💎</div>
+      <div className="gems-banner">
+        <div className="gems-banner-icon">💎</div>
         <div>
-          <div style={{ fontSize: 13, opacity: 0.85 }}>Your gems balance</div>
-          <div style={{ fontSize: 32, fontWeight: 900 }}>{user?.gems ?? 0}</div>
+          <div className="gems-banner-label">Your gems balance</div>
+          <div className="gems-banner-value">{user?.gems ?? 0}</div>
         </div>
       </div>
 
@@ -81,13 +81,14 @@ export default function ShopPage() {
         {ITEMS.map(item => {
           const canAfford = (user?.gems ?? 0) >= item.price;
           return (
-            <div key={item.id} className="profile-card" style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '20px 24px' }}>
-              <div style={{ fontSize: 40, flexShrink: 0 }}>{item.icon}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 800, fontSize: 16 }}>{item.name}</div>
-                <div style={{ fontSize: 13, color: '#AFAFAF', marginTop: 2 }}>{item.desc}</div>
+            <div key={item.id} className="profile-card shop-item">
+              <div className="shop-item-icon">{item.icon}</div>
+              <div className="shop-item-info">
+                <div className="shop-item-name">{item.name}</div>
+                <div className="shop-item-desc">{item.desc}</div>
               </div>
               <button
+                type="button"
                 className={`btn ${item.comingSoon ? 'btn-gray' : canAfford ? 'btn-blue' : 'btn-gray'}`}
                 style={{ padding: '10px 18px', fontSize: 14, flexShrink: 0 }}
                 onClick={() => handleBuy(item.id)}
@@ -100,7 +101,7 @@ export default function ShopPage() {
         })}
       </div>
 
-      <p style={{ textAlign: 'center', marginTop: 32, color: '#AFAFAF', fontSize: 13, fontWeight: 600 }}>
+      <p style={{ textAlign: 'center', marginTop: 32, color: 'var(--duo-gray2)', fontSize: 13, fontWeight: 600 }}>
         Earn gems by completing lessons and maintaining your streak 🔥
       </p>
     </div>

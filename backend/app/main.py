@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.database import init_db
 from app.api import users, courses, lessons, gamification
+from app.api import ai
 
 
 def create_app() -> FastAPI:
@@ -28,18 +29,22 @@ def create_app() -> FastAPI:
     app.include_router(courses.router, prefix=settings.API_V1_PREFIX)
     app.include_router(lessons.router, prefix=settings.API_V1_PREFIX)
     app.include_router(gamification.router, prefix=settings.API_V1_PREFIX)
+    app.include_router(ai.router, prefix=settings.API_V1_PREFIX)
 
     @app.on_event("startup")
     def on_startup():
         init_db()
-        # Auto-seed on first deploy so evaluators get a working demo
-        import sys
-        from pathlib import Path
-        backend_root = Path(__file__).resolve().parent.parent
-        if str(backend_root) not in sys.path:
-            sys.path.insert(0, str(backend_root))
-        from seed import seed_if_empty
-        seed_if_empty()
+        try:
+            import sys
+            from pathlib import Path
+            backend_root = Path(__file__).resolve().parent.parent
+            if str(backend_root) not in sys.path:
+                sys.path.insert(0, str(backend_root))
+            from seed import seed_if_empty
+            seed_if_empty()
+        except Exception as exc:
+            import logging
+            logging.getLogger("uvicorn.error").warning("Auto-seed skipped: %s", exc)
 
     @app.get("/")
     def health():
