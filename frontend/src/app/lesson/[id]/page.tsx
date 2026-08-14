@@ -3,6 +3,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { fetchLesson, fetchUser, completeLesson } from '@/lib/api';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+
+// framer-motion typing workaround for CI / React 19
+const MotionDiv: any = motion.div as any;
 import type { Lesson, Exercise, LessonCompleteResponse } from '@/lib/types';
 import {
   MultipleChoice, WordBank, FillBlank, TypeAnswer, MatchPairs,
@@ -272,7 +275,7 @@ export default function LessonPage() {
         <p className="exercise-sub">{exerciseHint}</p>
         <h2 className="exercise-prompt">{exercise.prompt}</h2>
         <AnimatePresence mode="popLayout" initial={false}>
-          <motion.div
+          <MotionDiv
             key={current}
             initial={reduceMotion ? undefined : { opacity: 0, y: 10 }}
             animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
@@ -280,7 +283,7 @@ export default function LessonPage() {
             transition={{ duration: 0.26, ease: 'easeOut' }}
           >
             {renderExercise()}
-          </motion.div>
+          </MotionDiv>
         </AnimatePresence>
         {completeError && (
           <p className="lesson-error">{completeError}</p>
@@ -289,7 +292,7 @@ export default function LessonPage() {
 
       <AnimatePresence>
         {feedback && !outOfHearts && (
-          <motion.div
+          <MotionDiv
             initial={reduceMotion ? undefined : { opacity: 0, y: 12 }}
             animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
             exit={reduceMotion ? undefined : { opacity: 0, y: 12 }}
@@ -301,7 +304,7 @@ export default function LessonPage() {
               correctAnswer={feedback.correctAnswer}
               onContinue={handleContinue}
             />
-          </motion.div>
+          </MotionDiv>
         )}
       </AnimatePresence>
 

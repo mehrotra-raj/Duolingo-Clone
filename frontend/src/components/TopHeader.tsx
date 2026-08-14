@@ -4,6 +4,10 @@ import type { User } from '@/lib/types';
 import { IconStreak, IconHeart, IconGem } from './icons';
 import { motion, useReducedMotion } from 'framer-motion';
 
+// Workaround: framer-motion types can conflict with React 19 in some CI builds.
+// Create a loose-typed alias so `className` and standard HTML props are allowed.
+const MotionDiv: any = motion.div as any;
+
 interface Props { user: User | null }
 
 export default function TopHeader({ user }: Props) {
@@ -18,7 +22,7 @@ export default function TopHeader({ user }: Props) {
   return (
     <header className="top-header">
       <div className="top-header-course">
-        <motion.div
+        <MotionDiv
           className="mascot"
           role="img"
           aria-label="Friendly bird mascot"
@@ -49,10 +53,10 @@ export default function TopHeader({ user }: Props) {
             <span>{user?.daily_xp_earned ?? 0}/{user?.daily_xp_goal ?? 20}</span>
           </div>
           <div className="header-xp-bar">
-            {reduceMotion ? (
+              {reduceMotion ? (
               <div className="header-xp-fill" style={{ width: `${xpPct}%` }} />
             ) : (
-              <motion.div
+              <MotionDiv
                 className="header-xp-fill"
                 initial={{ width: 0 }}
                 animate={{ width: `${xpPct}%` }}
